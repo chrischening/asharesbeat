@@ -1,0 +1,45 @@
+name: Refresh Dashboard
+
+on:
+  schedule:
+    # 盘前 8:20 (UTC 0:20), 盘中每15分钟 (UTC 1:15-7:00), 盘后 15:30 (UTC 7:30), 晚间 21:00 (UTC 13:00)
+    - cron: '20 0 * * 1-5'      # 盘前 08:20 BJT
+    - cron: '15,30,45 1-6 * * 1-5'  # 盘中 09:15-14:45 BJT (每15分钟)
+    - cron: '0 1-7 * * 1-5'     # 盘中整点
+    - cron: '30 7 * * 1-5'      # 盘后 15:30 BJT
+    - cron: '0 13 * * *'        # 晚间 21:00 BJT
+  workflow_dispatch:             # 手动触发按钮
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install requests
+
+      - name: Run monitor
+        env:
+          TG_TOKEN: ${{ secrets.TG_TOKEN }}
+          TG_CHAT_ID: ${{ secrets.TG_CHAT_ID }}
+          TG_CHANNEL: ${{ secrets.TG_CHANNEL }}
+        run: python monitor.py
+
+      - name: Commit updated dashboard
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add docs/index.html
+          git diff --staged --quiet || git commit -m "refresh: $(TZ=Asia/Shanghai date '+%Y-%m-%d %H:%M') BJT"
+          git push
