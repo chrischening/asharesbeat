@@ -481,7 +481,7 @@ def fetch_quotes(codes):
                     q[f[2]] = {
                         'name':f[1],'code':f[2],'market':'A',
                         'price':float(f[3] or 0),'prev_close':float(f[4] or 0),
-                        'open':float(f[5] or 0),'volume':int(f[6] or 0),
+                        'open':float(f[5] or 0),'volume':int(float(f[6] or 0)),
                         'high':float(f[33] or 0),'low':float(f[34] or 0),
                         'change':float(f[31] or 0),'change_pct':float(f[32] or 0),
                         'amount':float(f[37] or 0),
@@ -506,7 +506,7 @@ def fetch_quotes(codes):
                     q[store_key] = {
                         'name':f[1],'code':store_key,'market':'HK',
                         'price':float(f[3] or 0),'prev_close':float(f[4] or 0),
-                        'open':float(f[5] or 0),'volume':int(f[6] or 0),
+                        'open':float(f[5] or 0),'volume':int(float(f[6] or 0)),
                         'high':float(f[33] or 0),'low':float(f[34] or 0),
                         'change':float(f[31] or 0),'change_pct':float(f[32] or 0),
                         'amount':float(f[37] or 0),
@@ -526,10 +526,11 @@ def fetch_quotes(codes):
                 if not m: continue
                 f = m.group(2).split('~')
                 if len(f) >= 30:
-                    q[f[2]] = {
-                        'name':f[1],'code':f[2],'market':'US',
+                    raw_code = f[2].split('.')[0]  # NVDA.OQ → NVDA
+                    q[raw_code] = {
+                        'name':f[1],'code':raw_code,'market':'US',
                         'price':float(f[3] or 0),'prev_close':float(f[4] or 0),
-                        'open':float(f[5] or 0),'volume':int(f[6] or 0),
+                        'open':float(f[5] or 0),'volume':int(float(f[6] or 0)),
                         'high':float(f[33] or 0) if len(f)>33 else 0,
                         'low':float(f[34] or 0) if len(f)>34 else 0,
                         'change':float(f[31] or 0),'change_pct':float(f[32] or 0),
