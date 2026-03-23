@@ -148,16 +148,34 @@ a{color:inherit;text-decoration:none}
 .fgb{flex:1;border-radius:2px 2px 0 0;min-height:2px}
 .fund-est{font-size:10px;color:var(--t3);margin-top:6px;padding-top:6px;border-top:1px solid var(--bdr)}
 .fund-est b{font-family:'JetBrains Mono',monospace}
+
+/* Market Tabs (global) */
+.mkt-tabs{display:flex;gap:0;border-radius:8px;overflow:hidden;border:1px solid var(--bdr)}
+.mkt-tab{padding:6px 18px;font-size:13px;font-weight:700;cursor:pointer;transition:all .2s;background:transparent;color:var(--t3);border:none;font-family:'Noto Sans SC',sans-serif;position:relative}
+.mkt-tab:hover{color:var(--t1);background:rgba(255,255,255,.03)}
+.mkt-tab.active{color:#fff}
+.mkt-tab[data-m="A"].active{background:var(--red);color:#fff}
+.mkt-tab[data-m="HK"].active{background:#f97316;color:#fff}
+.mkt-tab[data-m="US"].active{background:#818cf8;color:#fff}
+.mkt-tab[data-m="ALL"].active{background:var(--cyan);color:#fff}
+.mkt-badge{font-size:9px;padding:1px 5px;border-radius:8px;margin-left:4px;font-family:'JetBrains Mono',monospace;vertical-align:middle}
 </style>
 </head>
 <body>
 <!-- TOP BAR -->
 <header class="topbar fi">
   <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap">
-    <h1>A股利好监控</h1>
+    <h1>全球利好监控</h1>
     <span style="font-size:10px;background:rgba(6,182,212,.08);color:var(--cyan);padding:3px 10px;border-radius:4px;border:1px solid rgba(6,182,212,.12)">同花顺 + 东方财富 + 天天基金</span>
   </div>
   <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+    <div class="mkt-tabs" id="globalMktTabs">
+      <button class="mkt-tab active" data-m="ALL">全部</button>
+      <button class="mkt-tab" data-m="A">A股</button>
+      <button class="mkt-tab" data-m="HK">港股</button>
+      <button class="mkt-tab" data-m="US">美股</button>
+    </div>
+    <span style="width:1px;height:16px;background:var(--bdr);margin:0 4px"></span>
     <span class="pill pill-r">利好 __STATS_BULL__</span>
     <span class="pill pill-g">利空 __STATS_BEAR__</span>
     <span class="pill pill-y">中性 __STATS_NEUT__</span>
@@ -235,9 +253,18 @@ a{color:inherit;text-decoration:none}
 </div>
 <script>
 const HOT7=__HOT7_JSON__;
+const HOT7_A=__HOT7_A_JSON__;
+const HOT7_HK=__HOT7_HK_JSON__;
+const HOT7_US=__HOT7_US_JSON__;
 const PICKS=__PICKS_JSON__;
+const PICKS_A=__PICKS_A_JSON__;
+const PICKS_HK=__PICKS_HK_JSON__;
+const PICKS_US=__PICKS_US_JSON__;
 const NIGHT=__NIGHT_NEWS_JSON__;
 const ALL=__ALL_NEWS_JSON__;
+const ALL_A=__ALL_A_JSON__;
+const ALL_HK=__ALL_HK_JSON__;
+const ALL_US=__ALL_US_JSON__;
 const BULL=__BULL_NEWS_JSON__;
 const BEAR=__BEAR_NEWS_JSON__;
 const NEUT=__NEUT_NEWS_JSON__;
@@ -245,21 +272,24 @@ const Q=__QUOTES_JSON__;
 const SECS=__SECTORS_JSON__;
 const FUNDS=__FUND_DATA_JSON__;
 
+let CUR_MKT='ALL'; // current market filter
+
 function fmtAmt(v){if(!v)return'-';if(v>=10000)return(v/10000).toFixed(1)+'亿';return v.toFixed(0)+'万'}
 function arrow(v){return v>0?'+':''}
 function cls(v){return v>0?'up':v<0?'down':'flat'}
 
 // ═══ Realtime Picks ═══
-function renderPicks(){
+function renderPicks(data){
   const g=document.getElementById('pickGrid');
-  const maxE=Math.max(...PICKS.map(p=>p.elasticity),1);
+  const picks=data||PICKS;
+  const maxE=Math.max(...picks.map(p=>p.elasticity),1);
   const lvlStyle={S:'background:linear-gradient(135deg,#f43f5e,#e11d48);color:#fff;font-weight:900;font-size:13px;box-shadow:0 0 12px rgba(244,63,94,.4)',A:'background:var(--red2);color:var(--red);font-weight:700',B:'background:var(--orn2);color:var(--orn);font-weight:600',C:'background:var(--t4);color:var(--t3);font-weight:500'};
   const lvlColors={S:'#f43f5e',A:'#f97316',B:'#eab308',C:'#475569'};
   const lvlNames={S:'S级 · 重大利好',A:'A级 · 显著利好',B:'B级 · 一般利好',C:'C级 · 轻微利好'};
 
   // Group by level
   const groups={S:[],A:[],B:[],C:[]};
-  PICKS.forEach(p=>{ const l=p.level||'C'; if(groups[l])groups[l].push(p); else groups.C.push(p); });
+  picks.forEach(p=>{ const l=p.level||'C'; if(groups[l])groups[l].push(p); else groups.C.push(p); });
 
   let html='';
   ['S','A','B','C'].forEach(lvl=>{
@@ -316,9 +346,10 @@ function renderPicks(){
 }
 
 // ═══ Hot 7 ═══
-function renderHot7(){
+function renderHot7(data){
   const g=document.getElementById('hotGrid');
-  g.innerHTML=HOT7.map((s,i)=>{
+  const hot7=data||HOT7;
+  g.innerHTML=hot7.map((s,i)=>{
     const c=cls(s.change_pct);
     const pctBg=s.change_pct>0?'var(--red2)':s.change_pct<0?'var(--grn2)':'var(--t4)';
     const pctC=s.change_pct>0?'var(--red)':s.change_pct<0?'var(--grn)':'var(--t3)';
@@ -500,13 +531,79 @@ function setupFundTabs(){
   renderFunds('all');
 }
 
+// ═══ Market Switching ═══
+function getPicksForMarket(m){
+  if(m==='A') return PICKS_A;
+  if(m==='HK') return PICKS_HK;
+  if(m==='US') return PICKS_US;
+  return PICKS;
+}
+function getHot7ForMarket(m){
+  if(m==='A') return HOT7_A;
+  if(m==='HK') return HOT7_HK;
+  if(m==='US') return HOT7_US;
+  return HOT7;
+}
+function getAllNewsForMarket(m){
+  if(m==='A') return ALL_A;
+  if(m==='HK') return ALL_HK;
+  if(m==='US') return ALL_US;
+  return ALL;
+}
+
+function switchMarket(m){
+  CUR_MKT=m;
+  // Update tab active states
+  document.querySelectorAll('#globalMktTabs .mkt-tab').forEach(t=>t.classList.toggle('active',t.dataset.m===m));
+  // Re-render market-sensitive sections
+  renderPicks(getPicksForMarket(m));
+  renderHot7(getHot7ForMarket(m));
+  renderSectors();
+  // Re-render all news tab with market filter
+  const allList=document.getElementById('allList');
+  const allNews=getAllNewsForMarket(m);
+  renderNewsList(allNews, allList);
+  // Reset all news sentiment tabs to "all"
+  document.querySelectorAll('#allTabs .ntab').forEach(t=>t.classList.toggle('active',t.dataset.f==='all'));
+  // Re-setup all news tabs with filtered data
+  setupTabsForData('allTabs','allList',allNews);
+}
+
+// Variant of setupTabs that re-binds data without re-adding listeners
+let _tabHandlers={};
+function setupTabsForData(tabsId, listId, allData){
+  _tabHandlers[tabsId]={listId, allData};
+}
+
+document.getElementById('globalMktTabs').addEventListener('click',e=>{
+  if(e.target.classList.contains('mkt-tab')) switchMarket(e.target.dataset.m);
+});
+
 // ═══ Init ═══
 renderPicks();
 renderHot7();
 renderSectors();
 setupFundTabs();
 setupTabs('nightTabs','nightList',NIGHT);
-setupTabs('allTabs','allList',ALL);
+// Custom all-news tabs with market support
+(function(){
+  const tabs=document.getElementById('allTabs');
+  const list=document.getElementById('allList');
+  function getBase(){ return (_tabHandlers['allTabs']||{}).allData || ALL; }
+  function getData(f){
+    const base=getBase();
+    if(f==='利好')return base.filter(n=>n.sentiment==='利好');
+    if(f==='利空')return base.filter(n=>n.sentiment==='利空');
+    if(f==='中性')return base.filter(n=>n.sentiment==='中性');
+    return base;
+  }
+  function render(f){
+    renderNewsList(getData(f||'all'),list);
+    tabs.querySelectorAll('.ntab').forEach(t=>t.classList.toggle('active',t.dataset.f===(f||'all')));
+  }
+  tabs.addEventListener('click',e=>{if(e.target.classList.contains('ntab'))render(e.target.dataset.f)});
+  render('all');
+})();
 
 // ═══ Auto-refresh timer ═══
 (function(){

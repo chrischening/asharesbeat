@@ -96,11 +96,44 @@ BEAR_KW = [
     '做空','预警','亏','下滑','缩量','疲软',
 ]
 
+# ═══ MARKET CONSTANTS ═══════════════════════════════════════
+# THS stockMarket → market label
+MARKET_MAP = {
+    '22': 'A', '33': 'A', '151': 'A', '17': 'A',   # A股
+    '177': 'HK',                                      # 港股
+    '185': 'US',                                      # 美股
+}
+A_MARKETS = ('22', '33', '151', '17')
+HK_MARKETS = ('177',)
+US_MARKETS = ('185',)
+ALL_MARKETS = A_MARKETS + HK_MARKETS + US_MARKETS
+
+# HK/US sector-ETF mapping
+SECTOR_ETF_HK = {
+    '科技':   {'etf':'03032','name':'恒生科技ETF','desc':'港股科技龙头'},
+    '互联网': {'etf':'03032','name':'恒生科技ETF','desc':'互联网/平台经济'},
+    '医药':   {'etf':'03174','name':'恒生医药ETF','desc':'港股医药'},
+    '金融':   {'etf':'02840','name':'恒生金融ETF','desc':'港股金融'},
+    '地产':   {'etf':'03000','name':'恒生地产ETF','desc':'港股地产'},
+    '消费':   {'etf':'03131','name':'恒生消费ETF','desc':'港股消费'},
+}
+SECTOR_ETF_US = {
+    '科技':   {'etf':'QQQ','name':'纳指100ETF','desc':'美股科技巨头'},
+    '半导体': {'etf':'SOXX','name':'半导体ETF','desc':'美股芯片'},
+    'AI':     {'etf':'QQQ','name':'纳指100ETF','desc':'AI/大模型'},
+    '新能源': {'etf':'TAN','name':'太阳能ETF','desc':'美股新能源'},
+    '医药':   {'etf':'XBI','name':'生物科技ETF','desc':'美股生物医药'},
+    '金融':   {'etf':'XLF','name':'金融ETF','desc':'美股金融'},
+}
+
 # ═══ 1. FETCH NEWS ══════════════════════════════════════════
 def fetch_news(pages=4, page_size=40):
     all_news, seen = [], set()
-    for tag in ['', '-21101', '21109']:
-        for pg in range(1, pages+1):
+    # A股 tags: '' (all), '-21101' (important), '21109' (opportunity)
+    # 港股: '21105', 美股: '21107'
+    for tag in ['', '-21101', '21109', '21105', '21107']:
+        pg_count = pages if tag in ['', '-21101', '21109'] else 2  # fewer pages for HK/US
+        for pg in range(1, pg_count+1):
             url = f'https://news.10jqka.com.cn/tapp/news/push/stock/?page_size={page_size}&track=website&tag={tag}&page={pg}'
             try:
                 r = requests.get(url, headers=THS, timeout=10)
@@ -118,7 +151,7 @@ def fetch_eastmoney_news(pages=3, page_size=50):
     """Fetch news from East Money 7x24 live feed (kuaixun API)."""
     all_news, seen = [], set()
     # East Money 快讯 channels: 102=财经, 103=股票
-    for col_id in ['102', '103']:
+    for col_id in ['102', '103', '132']:  # 132=国际市场
         for pg in range(1, pages+1):
             try:
                 url = f'https://newsapi.eastmoney.com/kuaixun/v1/getlist_{col_id}_ajaxResult_{page_size}_{pg}_.html'
@@ -247,15 +280,34 @@ def fetch_all_fund_data():
     return fund_data
 
 # ═══ 2. FETCH QUOTES ════════════════════════════════════════
-def sym(code):
-    return f'sh{code}' if code.startswith('6') else f'sz{code}'
+def sym(code, market='A'):
+    """Convert code to Tencent quote symbol. market: 'A', 'HK', 'US'"""
+    if market == 'HK':
+        c = code.replace('HK', '').replace('hk', '').lstrip('0') or '0'
+        return f'hk{c.zfill(5)}'
+    elif market == 'US':
+        return f'us{code}'
+    else:
+        return f'sh{code}' if code.startswith('6') else f'sz{code}'
+
+def detect_market(code):
+    """Detect market from code format."""
+    if re.match(r'^\d{6}$', code): return 'A'
+    if code.upper().startswith('HK') or (re.match(r'^\d{4,5}$', code)): return 'HK'
+    if re.match(r'^[A-Za-z]', code): return 'US'
+    return 'A'
 
 def fetch_quotes(codes):
-    codes = [c for c in codes if re.match(r'^\d{6}$', c)]
+    """Fetch quotes for A/HK/US stocks. Codes can be mixed markets."""
     if not codes: return {}
+    # Separate by market
+    a_codes = [c for c in codes if re.match(r'^\d{6}$', c)]
+    hk_codes = [c for c in codes if c.upper().startswith('HK') or (re.match(r'^\d{4,5}$', c) and c not in a_codes and len(c) <= 5)]
+    us_codes = [c for c in codes if re.match(r'^[A-Za-z]', c) and not c.upper().startswith('HK')]
     q = {}
-    for i in range(0, len(codes), 30):
-        batch = [sym(c) for c in codes[i:i+30]]
+    # A-shares
+    for i in range(0, len(a_codes), 30):
+        batch = [sym(c, 'A') for c in a_codes[i:i+30]]
         try:
             r = requests.get(f'https://qt.gtimg.cn/q={",".join(batch)}', headers=QT, timeout=10)
             for ln in r.text.strip().split('\n'):
@@ -266,25 +318,77 @@ def fetch_quotes(codes):
                 f = m.group(2).split('~')
                 if len(f) >= 46:
                     q[f[2]] = {
-                        'name':f[1],'code':f[2],
+                        'name':f[1],'code':f[2],'market':'A',
                         'price':float(f[3] or 0),'prev_close':float(f[4] or 0),
                         'open':float(f[5] or 0),'volume':int(f[6] or 0),
                         'high':float(f[33] or 0),'low':float(f[34] or 0),
                         'change':float(f[31] or 0),'change_pct':float(f[32] or 0),
                         'amount':float(f[37] or 0),
                         'amplitude':float(f[43] or 0) if len(f)>43 else 0,
+                        'currency':'CNY',
+                    }
+        except: pass
+    # HK stocks
+    for i in range(0, len(hk_codes), 30):
+        batch = [sym(c, 'HK') for c in hk_codes[i:i+30]]
+        try:
+            r = requests.get(f'https://qt.gtimg.cn/q={",".join(batch)}', headers=QT, timeout=10)
+            for ln in r.text.strip().split('\n'):
+                ln = ln.strip()
+                if not ln or '=""' in ln: continue
+                m = re.search(r'v_(\w+)="(.+)"', ln)
+                if not m: continue
+                f = m.group(2).split('~')
+                if len(f) >= 46:
+                    raw_code = f[2]
+                    store_key = f'HK{raw_code}' if not raw_code.startswith('HK') else raw_code
+                    q[store_key] = {
+                        'name':f[1],'code':store_key,'market':'HK',
+                        'price':float(f[3] or 0),'prev_close':float(f[4] or 0),
+                        'open':float(f[5] or 0),'volume':int(f[6] or 0),
+                        'high':float(f[33] or 0),'low':float(f[34] or 0),
+                        'change':float(f[31] or 0),'change_pct':float(f[32] or 0),
+                        'amount':float(f[37] or 0),
+                        'amplitude':float(f[43] or 0) if len(f)>43 else 0,
+                        'currency':'HKD',
+                    }
+        except: pass
+    # US stocks
+    for i in range(0, len(us_codes), 20):
+        batch = [sym(c, 'US') for c in us_codes[i:i+20]]
+        try:
+            r = requests.get(f'https://qt.gtimg.cn/q={",".join(batch)}', headers=QT, timeout=10)
+            for ln in r.text.strip().split('\n'):
+                ln = ln.strip()
+                if not ln or '=""' in ln: continue
+                m = re.search(r'v_(\w+)="(.+)"', ln)
+                if not m: continue
+                f = m.group(2).split('~')
+                if len(f) >= 30:
+                    q[f[2]] = {
+                        'name':f[1],'code':f[2],'market':'US',
+                        'price':float(f[3] or 0),'prev_close':float(f[4] or 0),
+                        'open':float(f[5] or 0),'volume':int(f[6] or 0),
+                        'high':float(f[33] or 0) if len(f)>33 else 0,
+                        'low':float(f[34] or 0) if len(f)>34 else 0,
+                        'change':float(f[31] or 0),'change_pct':float(f[32] or 0),
+                        'amount':float(f[37] or 0) if len(f)>37 else 0,
+                        'amplitude':float(f[43] or 0) if len(f)>43 else 0,
+                        'currency':'USD',
                     }
         except: pass
     return q
 
 # ═══ 3. FETCH DAILY KLINE (for consecutive up days) ════════
 def fetch_kline(codes, days=10):
-    """Returns {code: [{'date','close','change_pct'}, ...]} most recent N days"""
+    """Returns {code: [{'date','close','change_pct'}, ...]} most recent N days.
+    Supports A-share (6-digit) and US (ticker) codes. HK k-line not available on Tencent."""
     result = {}
-    codes = [c for c in codes if re.match(r'^\d{6}$', c)]
     for code in codes:
+        mkt = detect_market(code)
+        if mkt == 'HK': continue  # Tencent has no HK k-line data
         try:
-            s = sym(code)
+            s = sym(code, mkt)
             url = f'https://web.ifzq.gtimg.cn/appstock/app/fqkline/get?param={s},day,,,{days},qfq'
             r = requests.get(url, headers=QT, timeout=8)
             d = r.json()
@@ -374,24 +478,35 @@ def analyze_all(news_list):
         else:
             sentiment, impact = '中性', imp*0.3
 
-        # Stocks
+        # Stocks — extract from all markets
         stocks = []
+        news_market = 'A'  # default market for this news item
         for s in item.get('stock',[]):
             c, mkt, n = s.get('stockCode',''), s.get('stockMarket',''), s.get('name','')
-            if not c or not re.match(r'^\d{6}$', c): continue
-            if mkt not in ('22','33','151','17'): continue
-            stocks.append({'code':c,'name':n,'market':mkt})
+            if not c: continue
+            mkt_label = MARKET_MAP.get(mkt, '')
+            if not mkt_label: continue
+            if mkt_label == 'A' and not re.match(r'^\d{6}$', c): continue
+            if mkt_label == 'HK':
+                c = c if c.startswith('HK') else f'HK{c}'
+                news_market = 'HK'
+            elif mkt_label == 'US':
+                news_market = 'US'
+            stocks.append({'code':c,'name':n,'market':mkt_label})
             all_codes.add(c)
+        # If no stock extracted, detect market from keywords
+        if not stocks:
+            if any(kw in text for kw in ['港股','恒生','恒指','港交所']): news_market = 'HK'
+            elif any(kw in text for kw in ['美股','纳指','标普','道琼斯','华尔街']): news_market = 'US'
 
-        # Sectors
+        # Sectors + ETFs (pick sector map based on market)
         sectors = [t['name'] for t in item.get('tagInfo',[]) if t.get('type')=='0']
-
-        # ETFs
         etfs = {}
+        sector_map = SECTOR_ETF_HK if news_market=='HK' else SECTOR_ETF_US if news_market=='US' else SECTOR_ETF
         for sec in sectors:
-            for k, v in SECTOR_ETF.items():
+            for k, v in sector_map.items():
                 if k in sec and v.get('etf'): etfs[v['etf']] = {'code':v['etf'],'name':v['name'],'desc':v.get('desc','')}
-        for k, v in SECTOR_ETF.items():
+        for k, v in sector_map.items():
             if k in text and v.get('etf'): etfs[v['etf']] = {'code':v['etf'],'name':v['name'],'desc':v.get('desc','')}
 
         # Score for hot7
@@ -409,6 +524,7 @@ def analyze_all(news_list):
                 e = stock_scores[sc['code']]
                 e['score'] += total; e['mentions'] += 1
                 e['name'] = sc['name']; e['code'] = sc['code']
+                e['market'] = sc.get('market', news_market)
                 e['news'].append(item.get('title','')); e['reasons'].update(reasons)
 
         analyzed = {
@@ -418,6 +534,7 @@ def analyze_all(news_list):
             'stocks': stocks, 'sectors': sectors,
             'etfs': list(etfs.values()),
             'tags': [t.get('name','') for t in item.get('tags',[])],
+            'market': news_market,
             'ctime': ctime,
         }
         all_analyzed.append(analyzed)
@@ -584,22 +701,49 @@ def generate_html(hot7, realtime_news, night_news, all_news, quotes, sector_summ
 
     def j(o): return json.dumps(o, ensure_ascii=False, default=str)
 
-    _BASEDIR = os.path.dirname(os.path.abspath(__file__))
-    with open(os.path.join(_BASEDIR, 'template.html'),'r',encoding='utf-8') as f:
+    # Split data by market for frontend tabs
+    def by_market(items, mkt):
+        return [n for n in items if n.get('market', 'A') == mkt]
+    hot7_by_mkt = {}
+    for mkt in ['A', 'HK', 'US']:
+        mkt_scores = [s for s in hot7 if s.get('market', 'A') == mkt]
+        mkt_hot7e = []
+        for s in mkt_scores:
+            q = quotes.get(s['code'],{})
+            st = streaks.get(s['code'],{})
+            mkt_hot7e.append({
+                **s, 'price':q.get('price',0), 'change_pct':q.get('change_pct',0),
+                'change':q.get('change',0), 'high':q.get('high',0), 'low':q.get('low',0),
+                'amount':q.get('amount',0), 'streak':st.get('streak',0),
+                'total_gain':st.get('total_gain',0),
+                'reasons':list(s['reasons']), 'news':s['news'][:5],
+            })
+        hot7_by_mkt[mkt] = mkt_hot7e
+
+    with open(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'template.html'),'r',encoding='utf-8') as f:
         html = f.read()
 
     reps = {
         '__TIMESTAMP__': now,
         '__HOT7_JSON__': j(hot7e),
+        '__HOT7_A_JSON__': j(hot7_by_mkt.get('A', [])),
+        '__HOT7_HK_JSON__': j(hot7_by_mkt.get('HK', [])),
+        '__HOT7_US_JSON__': j(hot7_by_mkt.get('US', [])),
+        '__PICKS_JSON__': j(realtime_picks),
+        '__PICKS_A_JSON__': j([p for p in realtime_picks if detect_market(p.get('code','')) == 'A']),
+        '__PICKS_HK_JSON__': j([p for p in realtime_picks if detect_market(p.get('code','')) == 'HK']),
+        '__PICKS_US_JSON__': j([p for p in realtime_picks if detect_market(p.get('code','')) == 'US']),
         '__REALTIME_NEWS_JSON__': j(realtime_news[:80]),
         '__NIGHT_NEWS_JSON__': j(night_news[:80]),
-        '__ALL_NEWS_JSON__': j(all_news[:120]),
+        '__ALL_NEWS_JSON__': j(all_news[:150]),
+        '__ALL_A_JSON__': j(by_market(all_news, 'A')[:80]),
+        '__ALL_HK_JSON__': j(by_market(all_news, 'HK')[:60]),
+        '__ALL_US_JSON__': j(by_market(all_news, 'US')[:60]),
         '__BULL_NEWS_JSON__': j([n for n in all_news if n['sentiment']=='利好'][:60]),
         '__BEAR_NEWS_JSON__': j([n for n in all_news if n['sentiment']=='利空'][:60]),
         '__NEUT_NEWS_JSON__': j([n for n in all_news if n['sentiment']=='中性'][:40]),
         '__QUOTES_JSON__': j(quotes),
         '__SECTORS_JSON__': j(sector_summary[:20]),
-        '__PICKS_JSON__': j(realtime_picks),
         '__STATS_TOTAL__': str(len(all_news)),
         '__STATS_BULL__': str(bull_c),
         '__STATS_BEAR__': str(bear_c),
@@ -1135,8 +1279,7 @@ def generate_dashboard_once():
     print(f"  [7/7] 生成HTML...", flush=True)
     _run_elapsed = time.time() - _run_start
     html = generate_html(hot7, rt_news, night_news, all_news, quotes, sec_sum, rt_picks, streaks, run_elapsed=_run_elapsed, run_api_calls=_api_calls, fund_data=fund_data)
-    _BASEDIR = os.path.dirname(os.path.abspath(__file__))
-    out = os.path.join(_BASEDIR, 'docs', 'index.html')
+    out = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'docs', 'index.html')
     os.makedirs(os.path.dirname(out), exist_ok=True)
     with open(out, 'w', encoding='utf-8') as f:
         f.write(html)
@@ -1341,8 +1484,7 @@ if __name__ == '__main__':
     print("[7/7] 生成面板...")
     _run_elapsed = time.time() - _run_start
     html = generate_html(hot7, rt_news, night_news, all_news, quotes, sec_sum, rt_picks, streaks, run_elapsed=_run_elapsed, run_api_calls=_api_calls, fund_data=fund_data)
-    _BASEDIR = os.path.dirname(os.path.abspath(__file__))
-    out = os.path.join(_BASEDIR, 'docs', 'index.html')
+    out = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'docs', 'index.html')
     os.makedirs(os.path.dirname(out), exist_ok=True)
     with open(out, 'w', encoding='utf-8') as f:
         f.write(html)
