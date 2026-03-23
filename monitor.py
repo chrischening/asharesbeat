@@ -126,6 +126,77 @@ SECTOR_ETF_US = {
     '金融':   {'etf':'XLF','name':'金融ETF','desc':'美股金融'},
 }
 
+# Well-known stock keyword mapping for auto-extraction from text
+HK_STOCK_KW = {
+    '腾讯': {'code':'HK00700','name':'腾讯控股'},
+    '阿里巴巴': {'code':'HK09988','name':'阿里巴巴'},
+    '阿里': {'code':'HK09988','name':'阿里巴巴'},
+    '美团': {'code':'HK03690','name':'美团'},
+    '小米': {'code':'HK01810','name':'小米集团'},
+    '京东': {'code':'HK09618','name':'京东集团'},
+    '网易': {'code':'HK09999','name':'网易'},
+    '百度': {'code':'HK09888','name':'百度集团'},
+    '快手': {'code':'HK01024','name':'快手'},
+    '比亚迪': {'code':'HK01211','name':'比亚迪'},
+    '中芯国际': {'code':'HK00981','name':'中芯国际'},
+    '华虹半导体': {'code':'HK01347','name':'华虹半导体'},
+    '理想汽车': {'code':'HK02015','name':'理想汽车'},
+    '蔚来': {'code':'HK09866','name':'蔚来'},
+    '小鹏汽车': {'code':'HK09868','name':'小鹏汽车'},
+    '商汤': {'code':'HK00020','name':'商汤'},
+    '药明生物': {'code':'HK02269','name':'药明生物'},
+    '药明康德': {'code':'HK02359','name':'药明康德'},
+    '携程': {'code':'HK09961','name':'携程集团'},
+    '联想': {'code':'HK00992','name':'联想集团'},
+    '李宁': {'code':'HK02331','name':'李宁'},
+    '安踏': {'code':'HK02020','name':'安踏体育'},
+    '海底捞': {'code':'HK06862','name':'海底捞'},
+    '中国平安': {'code':'HK02318','name':'中国平安'},
+    '工商银行': {'code':'HK01398','name':'工商银行'},
+    '建设银行': {'code':'HK00939','name':'建设银行'},
+    '恒生指数': {'code':'','name':'恒生指数'},
+    '恒生科技': {'code':'','name':'恒生科技指数'},
+}
+US_STOCK_KW = {
+    '英伟达': {'code':'NVDA','name':'英伟达'},
+    'NVIDIA': {'code':'NVDA','name':'英伟达'},
+    '苹果': {'code':'AAPL','name':'苹果'},
+    'Apple': {'code':'AAPL','name':'苹果'},
+    '特斯拉': {'code':'TSLA','name':'特斯拉'},
+    'Tesla': {'code':'TSLA','name':'特斯拉'},
+    '谷歌': {'code':'GOOGL','name':'谷歌'},
+    'Google': {'code':'GOOGL','name':'谷歌'},
+    '微软': {'code':'MSFT','name':'微软'},
+    'Microsoft': {'code':'MSFT','name':'微软'},
+    '亚马逊': {'code':'AMZN','name':'亚马逊'},
+    'Amazon': {'code':'AMZN','name':'亚马逊'},
+    'Meta': {'code':'META','name':'Meta'},
+    '脸书': {'code':'META','name':'Meta'},
+    '台积电': {'code':'TSM','name':'台积电'},
+    'AMD': {'code':'AMD','name':'AMD'},
+    '博通': {'code':'AVGO','name':'博通'},
+    '高通': {'code':'QCOM','name':'高通'},
+    '英特尔': {'code':'INTC','name':'英特尔'},
+    'OpenAI': {'code':'','name':'OpenAI'},
+    '波音': {'code':'BA','name':'波音'},
+    '摩根大通': {'code':'JPM','name':'摩根大通'},
+    '高盛': {'code':'GS','name':'高盛'},
+    '美国银行': {'code':'BAC','name':'美国银行'},
+    '辉瑞': {'code':'PFE','name':'辉瑞'},
+    '拼多多': {'code':'PDD','name':'拼多多'},
+    '哔哩哔哩': {'code':'BILI','name':'哔哩哔哩'},
+    'B站': {'code':'BILI','name':'哔哩哔哩'},
+    '奈飞': {'code':'NFLX','name':'奈飞'},
+    'Netflix': {'code':'NFLX','name':'奈飞'},
+    '可口可乐': {'code':'KO','name':'可口可乐'},
+    '星巴克': {'code':'SBUX','name':'星巴克'},
+    '伯克希尔': {'code':'BRK.B','name':'伯克希尔'},
+    '巴菲特': {'code':'BRK.B','name':'伯克希尔'},
+    '标普500': {'code':'','name':'标普500指数'},
+    '纳斯达克': {'code':'','name':'纳斯达克指数'},
+    '道琼斯': {'code':'','name':'道琼斯指数'},
+}
+
 # ═══ 1. FETCH NEWS ══════════════════════════════════════════
 def fetch_news(pages=4, page_size=40):
     all_news, seen = [], set()
@@ -150,8 +221,8 @@ def fetch_news(pages=4, page_size=40):
 def fetch_eastmoney_news(pages=3, page_size=50):
     """Fetch news from East Money 7x24 live feed (kuaixun API)."""
     all_news, seen = [], set()
-    # East Money 快讯 channels: 102=财经, 103=股票
-    for col_id in ['102', '103', '132']:  # 132=国际市场
+    # East Money 快讯 channels: 102=财经, 103=股票, 131=港股, 132=国际市场
+    for col_id in ['102', '103', '131', '132']:
         for pg in range(1, pages+1):
             try:
                 url = f'https://newsapi.eastmoney.com/kuaixun/v1/getlist_{col_id}_ajaxResult_{page_size}_{pg}_.html'
@@ -185,7 +256,97 @@ def fetch_eastmoney_news(pages=3, page_size=50):
             except: pass
     return all_news
 
-# ═══ 1c. FETCH FUND DATA (天天基金) ═════════════════════════
+# ═══ 1c. FETCH 华尔街见闻 (wallstreetcn) ═══════════════════════
+def fetch_wallstreetcn_news(limit=50):
+    """Fetch global financial news from 华尔街见闻 live feed."""
+    all_news, seen = [], set()
+    for channel in ['global-channel', 'a-stock-channel', 'us-stock-channel', 'hk-stock-channel']:
+        try:
+            url = f'https://api-one.wallstcn.com/apiv1/content/lives?channel={channel}&limit={limit}'
+            r = requests.get(url, headers={'User-Agent': UA}, timeout=10)
+            d = r.json()
+            if d.get('code') != 20000: continue
+            for it in d.get('data', {}).get('items', []):
+                nid = str(it.get('id', ''))
+                if not nid or nid in seen: continue
+                seen.add(nid)
+                ct = it.get('display_time', 0)
+                title = it.get('content_text', '') or it.get('title', '')
+                # Clean HTML tags
+                title = re.sub(r'<[^>]+>', '', title).strip()
+                if not title: continue
+                # Detect importance from score
+                score = it.get('score', 0) or 0
+                imp = '2' if score >= 70 else '1' if score >= 40 else '0'
+                all_news.append({
+                    'id': f'wscn_{nid}',
+                    'title': title[:200],
+                    'digest': title[:200],
+                    'url': f'https://wallstreetcn.com/live/{nid}',
+                    'ctime': ct,
+                    'import': imp,
+                    'color': '',
+                    'stock': [],
+                    'tagInfo': [],
+                    'tags': it.get('related_themes', []) or [],
+                    'source': 'wallstreetcn',
+                    'stockMarket': '',  # will be detected by analyze
+                })
+        except: pass
+    return all_news
+
+# ═══ 1d. FETCH 金十数据 (jin10) ══════════════════════════════
+def fetch_jin10_news():
+    """Fetch financial flash news from 金十数据."""
+    all_news, seen = [], set()
+    # channel: -8200=全部, -8201=外汇, -8202=商品, -8203=贵金属, -8204=债券, -8205=股市
+    for channel in ['-8200', '-8205']:
+        try:
+            url = f'https://flash-api.jin10.com/get_flash_list?max_time=&channel={channel}&vip=1'
+            headers = {'User-Agent': UA, 'x-app-id': 'bVBF4FyRTn5NJF5n', 'x-version': '1.0.0'}
+            r = requests.get(url, headers=headers, timeout=10)
+            d = r.json()
+            if d.get('status') != 200: continue
+            for it in d.get('data', []):
+                # Skip ads
+                if it.get('extras', {}).get('ad'): continue
+                nid = str(it.get('id', ''))
+                if not nid or nid in seen: continue
+                seen.add(nid)
+                title = it.get('data', {}).get('content', '') or it.get('data', {}).get('title', '')
+                title = re.sub(r'<[^>]+>', '', title).strip()
+                if not title or len(title) < 8: continue
+                # Parse time
+                time_str = it.get('time', '')
+                try:
+                    ct = datetime.strptime(time_str, '%Y-%m-%d %H:%M:%S').replace(tzinfo=BJT)
+                    ctime = int(ct.timestamp())
+                except: ctime = int(time.time())
+                imp = '2' if it.get('important') else '0'
+                # Extract symbols from remark
+                symbols = []
+                for rm in (it.get('remark', []) or []):
+                    if isinstance(rm, dict) and rm.get('symbol'):
+                        symbols.append(rm['symbol'])
+                all_news.append({
+                    'id': f'jin10_{nid}',
+                    'title': title[:200],
+                    'digest': title[:200],
+                    'url': '',
+                    'ctime': ctime,
+                    'import': imp,
+                    'color': '',
+                    'stock': [],
+                    'tagInfo': [],
+                    'tags': [],
+                    'source': 'jin10',
+                    'stockMarket': '',
+                    '_symbols': symbols,  # for market detection
+                })
+        except: pass
+    return all_news
+
+# ═══ 1e. FETCH FUND DATA (天天基金) ═════════════════════════
 FUND_TYPES = {
     '股票型': 'gp', '混合型': 'hh', '指数型': 'zs', '债券型': 'zq', 'QDII': 'qdii',
 }
@@ -494,10 +655,44 @@ def analyze_all(news_list):
                 news_market = 'US'
             stocks.append({'code':c,'name':n,'market':mkt_label})
             all_codes.add(c)
-        # If no stock extracted, detect market from keywords
+        # If no stock extracted, detect market from keywords or source metadata
         if not stocks:
-            if any(kw in text for kw in ['港股','恒生','恒指','港交所']): news_market = 'HK'
-            elif any(kw in text for kw in ['美股','纳指','标普','道琼斯','华尔街']): news_market = 'US'
+            if any(kw in text for kw in ['港股','恒生','恒指','港交所','腾讯','美团','阿里巴巴','小米','比亚迪电子','港元','恒生科技','南向资金','港通']): news_market = 'HK'
+            elif any(kw in text for kw in ['美股','纳指','标普','道琼斯','华尔街','美联储','Fed','纽约','费城','英伟达','苹果公司','特斯拉','谷歌','微软','亚马逊','Meta','美元指数','美债','美国国债','非农']): news_market = 'US'
+            # 金十数据 symbols hint
+            elif item.get('_symbols'):
+                syms = ' '.join(item.get('_symbols', []))
+                if any(s in syms for s in ['.N', '.OQ', '.US', 'QQQ', 'SPX']): news_market = 'US'
+                elif any(s in syms for s in ['.HK']): news_market = 'HK'
+            # Source-based channel hints
+            source = item.get('source', '')
+            if source == 'wallstreetcn' and news_market == 'A':
+                # wallstreetcn channel embedded in tags or content
+                if any(kw in text for kw in ['美国','欧洲','英国','日本','全球','国际','原油','黄金','白银','铜价']): news_market = 'US'
+
+        # Auto-extract well-known HK/US stocks from text (when no stock metadata)
+        if not stocks or (news_market in ('HK', 'US') and len(stocks) == 0):
+            kw_map = HK_STOCK_KW if news_market == 'HK' else US_STOCK_KW if news_market == 'US' else {}
+            # Also scan both maps if market is 'A' but text contains HK/US keywords
+            if news_market == 'A':
+                for kw, info in HK_STOCK_KW.items():
+                    if kw in text and info['code']:
+                        stocks.append({'code':info['code'],'name':info['name'],'market':'HK'})
+                        all_codes.add(info['code'])
+                        news_market = 'HK'
+                if news_market == 'A':
+                    for kw, info in US_STOCK_KW.items():
+                        if kw in text and info['code']:
+                            stocks.append({'code':info['code'],'name':info['name'],'market':'US'})
+                            all_codes.add(info['code'])
+                            news_market = 'US'
+            else:
+                seen_codes = set()
+                for kw, info in kw_map.items():
+                    if kw in text and info['code'] and info['code'] not in seen_codes:
+                        stocks.append({'code':info['code'],'name':info['name'],'market':news_market})
+                        all_codes.add(info['code'])
+                        seen_codes.add(info['code'])
 
         # Sectors + ETFs (pick sector map based on market)
         sectors = [t['name'] for t in item.get('tagInfo',[]) if t.get('type')=='0']
@@ -1008,6 +1203,14 @@ def do_full_summary(tg_token, tg_chat):
     """Fetch all data and send a full summary (Hot7 + realtime picks) to Telegram."""
     print(f"  [汇总] 抓取新闻...")
     news = fetch_news(pages=4, page_size=40)
+    em_news = fetch_eastmoney_news(pages=3, page_size=50)
+    wscn_news = fetch_wallstreetcn_news(limit=50)
+    jin10_news = fetch_jin10_news()
+    seen_titles = set(n.get('title','')[:20] for n in news)
+    for en in em_news + wscn_news + jin10_news:
+        if en['title'][:20] not in seen_titles:
+            news.append(en)
+            seen_titles.add(en['title'][:20])
     print(f"  [汇总] {len(news)}条 → 分析中...")
     hot7, rt_news, night_news, all_news, all_codes, sec_sum = analyze_all(news)
 
@@ -1232,16 +1435,22 @@ def generate_dashboard_once():
     _api_calls += 12
     print(f"        同花顺 {len(news)} 条", flush=True)
 
-    print("  [2/7] 获取东方财富快讯...", flush=True)
+    print("  [2/7] 获取东方财富 + 华尔街见闻 + 金十数据...", flush=True)
     em_news = fetch_eastmoney_news(pages=3, page_size=50)
+    _api_calls += 5  # 4 channels + buffer
+    wscn_news = fetch_wallstreetcn_news(limit=50)
     _api_calls += 4
+    jin10_news = fetch_jin10_news()
+    _api_calls += 2
     # Merge & dedup by title similarity
     seen_titles = set(n.get('title','')[:20] for n in news)
-    for en in em_news:
+    extra_count = 0
+    for en in em_news + wscn_news + jin10_news:
         if en['title'][:20] not in seen_titles:
             news.append(en)
             seen_titles.add(en['title'][:20])
-    print(f"        东方财富 {len(em_news)} 条, 合并后 {len(news)} 条", flush=True)
+            extra_count += 1
+    print(f"        东方财富 {len(em_news)} + 华尔街见闻 {len(wscn_news)} + 金十 {len(jin10_news)}, 新增 {extra_count}, 合并后 {len(news)} 条", flush=True)
 
     print("  [3/7] 分析情绪 / 提取热点...", flush=True)
     hot7, rt_news, night_news, all_news, all_codes, sec_sum = analyze_all(news)
@@ -1429,15 +1638,21 @@ if __name__ == '__main__':
     _api_calls += 12  # 3 tags × 4 pages
     print(f"      同花顺 {len(news)} 条")
 
-    print("[2/7] 获取东方财富快讯...")
+    print("[2/7] 获取东方财富 + 华尔街见闻 + 金十数据...")
     em_news = fetch_eastmoney_news(pages=3, page_size=50)
+    _api_calls += 5
+    wscn_news = fetch_wallstreetcn_news(limit=50)
     _api_calls += 4
+    jin10_news = fetch_jin10_news()
+    _api_calls += 2
     seen_titles = set(n.get('title','')[:20] for n in news)
-    for en in em_news:
+    extra_count = 0
+    for en in em_news + wscn_news + jin10_news:
         if en['title'][:20] not in seen_titles:
             news.append(en)
             seen_titles.add(en['title'][:20])
-    print(f"      东方财富 {len(em_news)} 条, 合并后 {len(news)} 条")
+            extra_count += 1
+    print(f"      东方财富 {len(em_news)} + 华尔街见闻 {len(wscn_news)} + 金十 {len(jin10_news)}, 新增 {extra_count}, 合并后 {len(news)} 条")
 
     print("[3/7] 分析情绪 / 提取热点...")
     hot7, rt_news, night_news, all_news, all_codes, sec_sum = analyze_all(news)
