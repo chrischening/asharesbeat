@@ -346,6 +346,61 @@ def fetch_jin10_news():
         except: pass
     return all_news
 
+# ═══ 1f. FETCH SOHU NEWS ═════════════════════════════════════════
+SOHU = {'User-Agent': UA, 'Referer': 'https://www.sohu.com/', 'Accept': 'application/json'}
+
+def fetch_sohu_news(pages=3, page_size=30):
+    """Fetch news from Sohu Finance (搜狐财经)."""
+    all_news, seen = [], set()
+    # Sohu news channels: 15=财经, 16=股票, 17=港股, 18=美股
+    for ch in ['15', '16', '17', '18']:
+        for pg in range(1, pages + 1):
+            try:
+                # Sohu mobile API for news feed
+                url = f'https://m.sohu.com/roll/news_roll_ch_{ch}_api?callback=callback&jsonCallBack=callback&page={pg}&size={page_size}&from=channel'
+                r = requests.get(url, headers=SOHU, timeout=10)
+                text = r.text
+                # Extract JSON from callback wrapper
+                m = re.search(r'callback\((.*)\)', text, re.S)
+                if not m: continue
+                d = json.loads(m.group(1))
+                for it in d.get('data', []):
+                    nid = str(it.get('id', ''))
+                    if not nid or nid in seen: continue
+                    seen.add(nid)
+                    title = it.get('title', '')
+                    if not title: continue
+                    # Parse time
+                    ctime_str = it.get('publicTime', '') or it.get('createTime', '')
+                    try:
+                        # Try multiple time formats
+                        for fmt in ['%Y-%m-%d %H:%M:%S', '%Y-%m-%d', '%m-%d %H:%M']:
+                            try:
+                                ct = datetime.strptime(ctime_str, fmt).replace(tzinfo=BJT)
+                                ctime = int(ct.timestamp())
+                                break
+                            except: continue
+                        else: ctime = int(time.time())
+                    except: ctime = int(time.time())
+                    # Determine importance
+                    imp = '2' if it.get('isTop', False) else '1' if it.get('hot', False) else '0'
+                    all_news.append({
+                        'id': f'sohu_{nid}',
+                        'title': title[:200],
+                        'digest': it.get('abstract', '') or title[:200],
+                        'url': it.get('url', '') or f'https://www.sohu.com/a/{nid}',
+                        'ctime': ctime,
+                        'import': imp,
+                        'color': '',
+                        'stock': [],
+                        'tagInfo': [],
+                        'tags': it.get('tags', []) or [],
+                        'source': 'sohu',
+                        'stockMarket': '',
+                    })
+            except: pass
+    return all_news
+
 # ═══ 1e. FETCH FUND DATA (天天基金) ═════════════════════════
 FUND_TYPES = {
     '股票型': 'gp', '混合型': 'hh', '指数型': 'zs', '债券型': 'zq', 'QDII': 'qdii',
@@ -1207,8 +1262,9 @@ def do_full_summary(tg_token, tg_chat):
     em_news = fetch_eastmoney_news(pages=3, page_size=50)
     wscn_news = fetch_wallstreetcn_news(limit=50)
     jin10_news = fetch_jin10_news()
+    sohu_news = fetch_sohu_news(pages=3, page_size=30)
     seen_titles = set(n.get('title','')[:20] for n in news)
-    for en in em_news + wscn_news + jin10_news:
+    for en in em_news + wscn_news + jin10_news + sohu_news:
         if en['title'][:20] not in seen_titles:
             news.append(en)
             seen_titles.add(en['title'][:20])
@@ -1436,22 +1492,24 @@ def generate_dashboard_once():
     _api_calls += 12
     print(f"        同花顺 {len(news)} 条", flush=True)
 
-    print("  [2/7] 获取东方财富 + 华尔街见闻 + 金十数据...", flush=True)
+    print("  [2/7] 获取东方财富 + 华尔街见闻 + 金十数据 + 搜狐财经...", flush=True)
     em_news = fetch_eastmoney_news(pages=3, page_size=50)
     _api_calls += 5  # 4 channels + buffer
     wscn_news = fetch_wallstreetcn_news(limit=50)
     _api_calls += 4
     jin10_news = fetch_jin10_news()
     _api_calls += 2
+    sohu_news = fetch_sohu_news(pages=3, page_size=30)
+    _api_calls += 3
     # Merge & dedup by title similarity
     seen_titles = set(n.get('title','')[:20] for n in news)
     extra_count = 0
-    for en in em_news + wscn_news + jin10_news:
+    for en in em_news + wscn_news + jin10_news + sohu_news:
         if en['title'][:20] not in seen_titles:
             news.append(en)
             seen_titles.add(en['title'][:20])
             extra_count += 1
-    print(f"        东方财富 {len(em_news)} + 华尔街见闻 {len(wscn_news)} + 金十 {len(jin10_news)}, 新增 {extra_count}, 合并后 {len(news)} 条", flush=True)
+    print(f"        东方财富 {len(em_news)} + 华尔街见闻 {len(wscn_news)} + 金十 {len(jin10_news)} + 搜狐 {len(sohu_news)}, 新增 {extra_count}, 合并后 {len(news)} 条", flush=True)
 
     print("  [3/7] 分析情绪 / 提取热点...", flush=True)
     hot7, rt_news, night_news, all_news, all_codes, sec_sum = analyze_all(news)
@@ -1639,21 +1697,23 @@ if __name__ == '__main__':
     _api_calls += 12  # 3 tags × 4 pages
     print(f"      同花顺 {len(news)} 条")
 
-    print("[2/7] 获取东方财富 + 华尔街见闻 + 金十数据...")
+    print("[2/7] 获取东方财富 + 华尔街见闻 + 金十数据 + 搜狐财经...")
     em_news = fetch_eastmoney_news(pages=3, page_size=50)
     _api_calls += 5
     wscn_news = fetch_wallstreetcn_news(limit=50)
     _api_calls += 4
     jin10_news = fetch_jin10_news()
     _api_calls += 2
+    sohu_news = fetch_sohu_news(pages=3, page_size=30)
+    _api_calls += 3
     seen_titles = set(n.get('title','')[:20] for n in news)
     extra_count = 0
-    for en in em_news + wscn_news + jin10_news:
+    for en in em_news + wscn_news + jin10_news + sohu_news:
         if en['title'][:20] not in seen_titles:
             news.append(en)
             seen_titles.add(en['title'][:20])
             extra_count += 1
-    print(f"      东方财富 {len(em_news)} + 华尔街见闻 {len(wscn_news)} + 金十 {len(jin10_news)}, 新增 {extra_count}, 合并后 {len(news)} 条")
+    print(f"      东方财富 {len(em_news)} + 华尔街见闻 {len(wscn_news)} + 金十 {len(jin10_news)} + 搜狐 {len(sohu_news)}, 新增 {extra_count}, 合并后 {len(news)} 条")
 
     print("[3/7] 分析情绪 / 提取热点...")
     hot7, rt_news, night_news, all_news, all_codes, sec_sum = analyze_all(news)
