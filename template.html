@@ -316,10 +316,12 @@ function renderPicks(data){
         const bc=d.pct>0?'var(--red3)':d.pct<0?'var(--grn3)':'var(--t3)';
         return `<div title="${d.date} ${d.pct>0?'+':''}${d.pct}%" style="width:14px;height:${h}px;background:${bc};border-radius:1px;flex-shrink:0"></div>`;
       }).join('')}<span style="font-size:8px;color:var(--t3);margin-left:4px;align-self:center">近${daily.length}日</span></div>`:'';
-      const digest=(p.news_digest||'').replace(/"/g,'&quot;').replace(/</g,'&lt;');
+const digest=(p.news_digest||'').replace(/"/g,'&quot;').replace(/</g,'&lt;');
       const newsLink=p.news_url||'';
-      html+=`<div class="pick-card level-${p.level||'C'}" ${newsLink?`onclick="window.open('${newsLink}','_blank')"`:''}">
-        <div class="pick-tip"><b style="color:var(--red)">[${p.level}级利好]</b> ${p.news_title}<br><span style="color:var(--t3);margin-top:4px;display:inline-block">${digest||'暂无摘要'}</span><br><span style="font-size:10px;color:var(--cyan);margin-top:4px;display:inline-block">${newsLink?'点击查看原文 →':'无链接'}</span></div>
+      const sourceLabel=p.news_source==='sohu'?'搜狐':p.news_source==='eastmoney'?'东财':p.news_source==='wallstreetcn'?'华尔街':p.news_source==='jin10'?'金十':'';
+      const sourceHtml=sourceLabel?`<span style="font-size:9px;background:rgba(129,140,248,0.2);color:#818cf8;padding:1px 4px;border-radius:3px;margin-left:6px">${sourceLabel}</span>`:'';
+      html+=`<div class="pick-card level-${p.level||'C'}" ${newsLink?`onclick="window.open('${newsLink}','_blank')"`:''}>
+        <div class="pick-tip"><b style="color:var(--red)">[${p.level}级利好]</b> ${p.news_title}${sourceHtml}<br><span style="color:var(--t3);margin-top:4px;display:inline-block">${digest||'暂无摘要'}</span><br><span style="font-size:10px;color:var(--cyan);margin-top:4px;display:inline-block">${newsLink?'点击查看原文 →':'无链接'}</span></div>
         <div class="elasticity-bar" style="width:${barW}%;background:linear-gradient(90deg,${lvlColors[p.level||'C']}88,transparent)"></div>
         <div class="pick-head">
           <div style="display:flex;align-items:center;gap:6px">

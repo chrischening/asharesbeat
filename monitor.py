@@ -909,6 +909,7 @@ def build_realtime_picks(realtime_news, quotes, klines, streaks):
                     'news_digest': n['digest'][:120],
                     'news_impact': n['impact'],
                     'news_ctime': n['ctime'],
+                    'news_source': n.get('source', ''),
                 }
         if best and best['code'] not in seen_codes:
             # Combined sort weight: impact * recency_factor * elasticity
