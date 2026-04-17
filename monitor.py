@@ -997,14 +997,14 @@ def generate_html(hot7, realtime_news, night_news, all_news, quotes, sector_summ
         '__PICKS_HK_JSON__': j([p for p in realtime_picks if detect_market(p.get('code','')) == 'HK']),
         '__PICKS_US_JSON__': j([p for p in realtime_picks if detect_market(p.get('code','')) == 'US']),
         '__REALTIME_NEWS_JSON__': j(realtime_news[:80]),
-        '__NIGHT_NEWS_JSON__': j(night_news[:80]),
-        '__ALL_NEWS_JSON__': j(all_news[:150]),
-        '__ALL_A_JSON__': j(by_market(all_news, 'A')[:80]),
-        '__ALL_HK_JSON__': j(by_market(all_news, 'HK')[:60]),
-        '__ALL_US_JSON__': j(by_market(all_news, 'US')[:60]),
-        '__BULL_NEWS_JSON__': j([n for n in all_news if n['sentiment']=='利好'][:60]),
-        '__BEAR_NEWS_JSON__': j([n for n in all_news if n['sentiment']=='利空'][:60]),
-        '__NEUT_NEWS_JSON__': j([n for n in all_news if n['sentiment']=='中性'][:40]),
+'__NIGHT_NEWS_JSON__': j(night_news[:80]),
+        '__ALL_NEWS_JSON__': j(all_news),  # 包含所有新闻以显示所有来源
+        '__ALL_A_JSON__': j(by_market(all_news, 'A')[:150]),
+        '__ALL_HK_JSON__': j(by_market(all_news, 'HK')[:100]),
+        '__ALL_US_JSON__': j(by_market(all_news, 'US')[:100]),
+        '__BULL_NEWS_JSON__': j([n for n in all_news if n['sentiment']=='利好'][:150]),
+        '__BEAR_NEWS_JSON__': j([n for n in all_news if n['sentiment']=='利空'][:150]),
+        '__NEUT_NEWS_JSON__': j([n for n in all_news if n['sentiment']=='中性'][:100]),
         '__QUOTES_JSON__': j(quotes),
         '__SECTORS_JSON__': j(sector_summary[:20]),
         '__STATS_TOTAL__': str(len(all_news)),
@@ -1770,6 +1770,9 @@ if __name__ == '__main__':
     print(f"      基金排行 {len(fund_data.get('summary',[]))} 只, 实时估值 {len(fund_data.get('estimates',{}))} 只")
 
     print("[7/7] 生成面板...")
+    from collections import Counter
+    source_counts = Counter(n.get('source', '') for n in all_news)
+    print(f"      新闻来源分布: {dict(source_counts)}")
     _run_elapsed = time.time() - _run_start
     html = generate_html(hot7, rt_news, night_news, all_news, quotes, sec_sum, rt_picks, streaks, run_elapsed=_run_elapsed, run_api_calls=_api_calls, fund_data=fund_data)
     out = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'docs', 'index.html')
