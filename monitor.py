@@ -399,7 +399,7 @@ def fetch_sohu_news(pages=3, page_size=20):
                         'id': f'sohu_{nid}',
                         'title': title[:200],
                         'digest': it.get('summary', '') or title[:200],
-                        'url': f'https://www.sohu.com/a/{nid}',
+                        'url': '',  # Sohu article URLs are no longer accessible
                         'ctime': ctime,
                         'import': imp,
                         'color': '',
