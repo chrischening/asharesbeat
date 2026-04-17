@@ -346,55 +346,66 @@ def fetch_jin10_news():
         except: pass
     return all_news
 
-# ═══ 1f. FETCH SOHU NEWS ═════════════════════════════════════════
+# ═══ 1f. FETCH SOHU NEWS (v2 API) ═════════════════════════════════
 SOHU = {'User-Agent': UA, 'Referer': 'https://www.sohu.com/', 'Accept': 'application/json'}
 
-def fetch_sohu_news(pages=3, page_size=30):
-    """Fetch news from Sohu Finance (搜狐财经)."""
+def fetch_sohu_news(pages=3, page_size=20):
+    """Fetch news from Sohu Finance using v2 API."""
     all_news, seen = [], set()
-    # Sohu news channels: 15=财经, 16=股票, 17=港股, 18=美股
-    for ch in ['15', '16', '17', '18']:
+    
+    # Sohu v2 API: 1462=财经, 1458=股票, 1460=港股, 1461=美股
+    channels = [
+        ('1462', '财经'),
+        ('1458', '股票'),
+        ('1460', '港股'),
+        ('1461', '美股'),
+    ]
+    
+    for channel_id, channel_name in channels:
         for pg in range(1, pages + 1):
             try:
-                # Sohu mobile API for news feed
-                url = f'https://m.sohu.com/roll/news_roll_ch_{ch}_api?callback=callback&jsonCallBack=callback&page={pg}&size={page_size}&from=channel'
-                r = requests.get(url, headers=SOHU, timeout=10)
-                text = r.text
-                # Extract JSON from callback wrapper
-                m = re.search(r'callback\((.*)\)', text, re.S)
-                if not m: continue
-                d = json.loads(m.group(1))
-                for it in d.get('data', []):
+                url = f'https://v2.sohu.com/public-api/feed?scene=CATEGORY&sceneId={channel_id}&page={pg}&size={page_size}'
+                r = requests.get(url, headers={'User-Agent': UA}, timeout=10)
+                items = r.json()
+                
+                if not isinstance(items, list):
+                    continue
+                    
+                for it in items:
                     nid = str(it.get('id', ''))
-                    if not nid or nid in seen: continue
+                    if not nid or nid in seen:
+                        continue
                     seen.add(nid)
-                    title = it.get('title', '')
-                    if not title: continue
+                    
+                    title = it.get('mobileTitle', '') or it.get('title', '')
+                    if not title:
+                        continue
+                    
                     # Parse time
-                    ctime_str = it.get('publicTime', '') or it.get('createTime', '')
+                    time_str = it.get('publicTime', '')
                     try:
-                        # Try multiple time formats
-                        for fmt in ['%Y-%m-%d %H:%M:%S', '%Y-%m-%d', '%m-%d %H:%M']:
-                            try:
-                                ct = datetime.strptime(ctime_str, fmt).replace(tzinfo=BJT)
-                                ctime = int(ct.timestamp())
-                                break
-                            except: continue
-                        else: ctime = int(time.time())
-                    except: ctime = int(time.time())
+                        if time_str:
+                            ct = datetime.fromtimestamp(time_str / 1000, BJT)
+                            ctime = int(ct.timestamp())
+                        else:
+                            ctime = int(time.time())
+                    except:
+                        ctime = int(time.time())
+                    
                     # Determine importance
-                    imp = '2' if it.get('isTop', False) else '1' if it.get('hot', False) else '0'
+                    imp = '2' if it.get('top', False) else '1'
+                    
                     all_news.append({
                         'id': f'sohu_{nid}',
                         'title': title[:200],
-                        'digest': it.get('abstract', '') or title[:200],
-                        'url': it.get('url', '') or f'https://www.sohu.com/a/{nid}',
+                        'digest': it.get('summary', '') or title[:200],
+                        'url': f'https://www.sohu.com/a/{nid}',
                         'ctime': ctime,
                         'import': imp,
                         'color': '',
                         'stock': [],
                         'tagInfo': [],
-                        'tags': it.get('tags', []) or [],
+                        'tags': [],
                         'source': 'sohu',
                         'stockMarket': '',
                     })
