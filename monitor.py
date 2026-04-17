@@ -798,6 +798,7 @@ def analyze_all(news_list):
             'tags': [t.get('name','') for t in item.get('tags',[])],
             'market': news_market,
             'ctime': ctime,
+            'source': item.get('source', ''),
         }
         all_analyzed.append(analyzed)
 

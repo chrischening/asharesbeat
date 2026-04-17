@@ -442,6 +442,10 @@ function renderNewsList(list, el, maxScore){
       if(q&&q.price>0){const a=q.change_pct>0?'↑':q.change_pct<0?'↓':'';ex=` <span class="${cls(q.change_pct)}" style="font-weight:700">${a}${Math.abs(q.change_pct).toFixed(2)}%</span>`}
       parts.push(`<span class="chip chip-etf">${e.name} ${e.code}${ex}</span>`);
     });
+    if(n.source){
+      const sc=n.source==='sohu'?'搜狐':n.source==='em'?'东方财富':n.source==='wscn'?'华尔街见闻':n.source==='jin10'?'金十':n.source;
+      parts.push(`<span class="chip" style="background:rgba(129,140,248,0.2);color:#818cf8">${sc}</span>`);
+    }
     const meta=parts.length?`<div class="nmeta">${parts.join('')}</div>`:'';
     const link=n.url?`<a href="${n.url}" target="_blank">${n.title}</a>`:n.title;
     return `<div class="nrow">
