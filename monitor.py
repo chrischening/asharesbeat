@@ -10,7 +10,7 @@ A股利好监控工具 v4
 """
 import requests, json, re, time, os, sys
 from datetime import datetime, timedelta, timezone
-from collections import defaultdict
+from collections import defaultdict, Counter
 
 # ═══ BEIJING TIME HELPER ═══════════════════════════════════
 BJT = timezone(timedelta(hours=8))
@@ -1013,6 +1013,9 @@ def generate_html(hot7, realtime_news, night_news, all_news, quotes, sector_summ
         '__STATS_NEUT__': str(neut_c),
         '__STATS_NIGHT__': str(len(night_news)),
         '__STATS_RT__': str(len(realtime_news)),
+        '__STATS_SOHU__': str(Counter(n.get('source', '') for n in all_news).get('sohu', 0)),
+        '__STATS_EM__': str(Counter(n.get('source', '') for n in all_news).get('eastmoney', 0)),
+        '__STATS_WSCN__': str(Counter(n.get('source', '') for n in all_news).get('wallstreetcn', 0)),
         '__RUN_ELAPSED__': f'{run_elapsed:.1f}',
         '__RUN_API_CALLS__': str(run_api_calls),
         '__FUND_DATA_JSON__': j(fund_data or {}),
