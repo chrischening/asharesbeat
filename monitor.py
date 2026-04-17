@@ -213,6 +213,7 @@ def fetch_news(pages=4, page_size=40):
                     for it in d['data'].get('list',[]):
                         if it['id'] not in seen:
                             seen.add(it['id'])
+                            it['source'] = 'ths'  # 标记为同花顺
                             all_news.append(it)
             except: pass
     return all_news
@@ -1017,6 +1018,8 @@ def generate_html(hot7, realtime_news, night_news, all_news, quotes, sector_summ
         '__STATS_SOHU__': str(Counter(n.get('source', '') for n in all_news).get('sohu', 0)),
         '__STATS_EM__': str(Counter(n.get('source', '') for n in all_news).get('eastmoney', 0)),
         '__STATS_WSCN__': str(Counter(n.get('source', '') for n in all_news).get('wallstreetcn', 0)),
+        '__STATS_JIN10__': str(Counter(n.get('source', '') for n in all_news).get('jin10', 0)),
+        '__STATS_THS__': str(Counter(n.get('source', '') for n in all_news).get('ths', 0)),
         '__RUN_ELAPSED__': f'{run_elapsed:.1f}',
         '__RUN_API_CALLS__': str(run_api_calls),
         '__FUND_DATA_JSON__': j(fund_data or {}),
