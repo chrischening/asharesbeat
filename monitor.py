@@ -354,12 +354,9 @@ def fetch_sohu_news(pages=3, page_size=20):
     """Fetch news from Sohu Finance using v2 API."""
     all_news, seen = [], set()
     
-    # Sohu v2 API: 1462=财经, 1458=股票, 1460=港股, 1461=美股
+    # Sohu v2 API: 1463=财经 only (更精准)
     channels = [
-        ('1462', '财经'),
-        ('1458', '股票'),
-        ('1460', '港股'),
-        ('1461', '美股'),
+        ('1463', '财经'),
     ]
     
     for channel_id, channel_name in channels:
